@@ -1,0 +1,311 @@
+---
+title: "Introduction to Regression in R"
+author: "Elvin"
+date: "2024-05-27"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Load data
+
+```{r loading data, warning=FALSE}
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readr)
+library(broom)
+library(ggfortify)
+library(fst)
+
+Taiwan_real_estate <- read_fst("/home/ea358/Introduction_to_Regression/taiwan_real_estate.fst")
+ad_conversion <- read_fst("/home/ea358/Introduction_to_Regression/ad_conversion.fst")
+churn_data <- read_fst("/home/ea358/Introduction_to_Regression/churn.fst")
+
+View(Taiwan_real_estate)
+View(ad_conversion)
+View(churn_data)
+```
+
+## 2. Visualizing two variables
+
+```{r loading data, warning=FALSE}
+
+ggplot(Taiwan_real_estate, aes(x = n_convenience, y = price_twd_msq)) +
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method = "lm", se = FALSE)
+```
+## 3. Visualizing two variables
+
+```{r loading data, warning=FALSE}
+
+lm(price_twd_msq ~ n_convenience, Taiwan_real_estate)
+```
+## 4. Visualizing numeric vs. categorical
+
+```{r loading data, warning=FALSE}
+
+ggplot(Taiwan_real_estate, aes(price_twd_msq)) +
+  geom_histogram(bins=10) +
+  facet_wrap(vars(house_age_years))
+```
+
+## 5. Calculating means by category
+
+```{r loading data, warning=FALSE}
+
+summary_stats <- Taiwan_real_estate %>% 
+  group_by(house_age_years) %>% 
+  summarise(mean_by_group = mean(price_twd_msq))
+
+summary_stats
+```
+## 6. lm() with a categorical explanatory variable
+
+```{r loading data, warning=FALSE}
+
+mdl_price_vs_age <- lm(price_twd_msq ~ house_age_years, Taiwan_real_estate)
+mdl_price_vs_age1 <- lm(price_twd_msq ~ house_age_years + 0, Taiwan_real_estate)
+
+mdl_price_vs_age
+mdl_price_vs_age1
+```
+
+## 7. Predicting house prices
+
+```{r loading data, warning=FALSE}
+
+explanatory_data <- tibble(n_convenience = 0:10)
+
+mdl_price_vs_conv <- lm(price_twd_msq ~ n_convenience, Taiwan_real_estate)
+
+prediction_data <- explanatory_data %>% 
+  mutate(price_twd_msq = predict(mdl_price_vs_conv, explanatory_data))
+
+prediction_data
+```
+
+## 8. Visualizing predictions
+
+```{r loading data, warning=FALSE}
+
+ggplot(Taiwan_real_estate, aes(n_convenience, price_twd_msq)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(data = prediction_data, aes(x = n_convenience, y = price_twd_msq), color = "yellow")
+```
+
+## 9. Extracting model elements
+
+```{r loading data, warning=FALSE}
+
+coefficients(mdl_price_vs_conv)
+fitted(mdl_price_vs_conv)
+residuals(mdl_price_vs_conv)
+summary(mdl_price_vs_conv)
+```
+
+## 10. Using broom
+
+```{r loading data, warning=FALSE}
+
+tidy(mdl_price_vs_conv)
+augment(mdl_price_vs_conv)
+glance(mdl_price_vs_conv)
+```
+
+## 11. Transforming the explanatory variable
+
+```{r loading data, warning=FALSE}
+
+plot1 <- ggplot(Taiwan_real_estate, aes(sqrt(dist_to_mrt_m), price_twd_msq)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+
+plot1
+
+mdl_price_vs_dist <- lm(price_twd_msq ~ sqrt(dist_to_mrt_m), Taiwan_real_estate)
+mdl_price_vs_dist
+
+explanatory_data <- tibble(dist_to_mrt_m = seq(0, 80, 10) ^ 2)
+
+prediction_data <- explanatory_data %>% 
+  
+mutate(price_twd_msq = predict(mdl_price_vs_dist, explanatory_data))
+
+prediction_data
+
+plot2 <- ggplot(Taiwan_real_estate, aes(sqrt(dist_to_mrt_m), price_twd_msq)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(data = prediction_data, color = "green", size = 5)
+
+plot2
+```
+
+## 12. Transforming the response variable
+
+```{r loading data, warning=FALSE}
+
+plot3 <- ggplot(ad_conversion, aes(n_impressions ^ 0.25, n_clicks ^ 0.25)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+
+plot3
+
+mdl_click_vs_impression_orig <- lm(n_clicks  ~ n_impressions, data = ad_conversion)
+mdl_click_vs_impression_trans <- lm(I(n_clicks ^ 0.25) ~ I(n_impressions ^ 0.25), data = ad_conversion)
+
+explanatory_data <- tibble(n_impressions = seq(0, 3e6, 5e5))
+
+prediction_data1 <- explanatory_data %>% 
+  mutate(n_clicks_025 = predict(mdl_click_vs_impression_trans, explanatory_data),
+        n_clicks = n_clicks_025 ^ 4) 
+
+prediction_data1
+
+ggplot(ad_conversion, aes(n_impressions ^ 0.25, n_clicks ^ 0.25)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(data = prediction_data1, aes(x = n_impressions ^ 0.25, y = n_clicks_025), color = "green", size = 5)
+```
+
+## 13. Coefficient of determination
+
+```{r loading data, warning=FALSE}
+
+summary(mdl_click_vs_impression_orig) 
+summary(mdl_click_vs_impression_trans)
+
+
+glance(mdl_click_vs_impression_orig) %>% 
+pull(r.squared)
+
+
+glance(mdl_click_vs_impression_trans) %>% 
+pull(r.squared)
+```
+
+## 14. Residual standard error
+
+```{r loading data, warning=FALSE}
+
+glance(mdl_click_vs_impression_orig) %>% 
+pull(sigma)
+
+
+glance(mdl_click_vs_impression_trans) %>% 
+pull(sigma)
+```
+
+## 15. Drawing diagnostic plots
+
+```{r loading data, warning=FALSE}
+
+autoplot(mdl_price_vs_conv, which = 1:3, nrow = 3, ncol = 1)
+
+```
+
+## 16. Extracting leverage and influence
+
+```{r loading data, warning=FALSE}
+
+mdl_price_vs_dist %>% 
+  augment %>% 
+  arrange(desc(.hat)) %>% 
+  head()
+
+
+autoplot(mdl_price_vs_dist, which = 4:6, nrow = 3, ncol = 1)
+```
+
+## 17. Exploring the explanatory variables - Churn data
+
+```{r loading data, warning=FALSE}
+
+ggplot(churn_data, aes(time_since_last_purchase)) +
+  geom_histogram(binwidth = 0.25) +
+  facet_grid(rows = vars(has_churned))
+
+
+
+ggplot(churn_data, aes(time_since_first_purchase)) +
+  geom_histogram(binwidth = 0.25) +
+  facet_grid(rows = vars(has_churned))
+```
+
+## 18. Visualizing linear and logistic models
+
+```{r loading data, warning=FALSE}
+
+  ggplot(churn_data, aes(time_since_first_purchase, has_churned)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") + 
+  geom_smooth(method = "glm", se = FALSE, method.args = list(family = binomial))
+
+  plt_churn_vs_relationship <- ggplot(churn_data, aes(time_since_first_purchase, has_churned)) +
+  geom_point() + 
+  geom_smooth(method = "glm", se = FALSE, method.args = list(family = binomial))
+
+  plt_churn_vs_relationship
+```
+
+## 19. Logistic regression with glm()
+
+```{r loading data, warning=FALSE}
+
+mdl_churn_vs_relationship <- glm(has_churned ~ time_since_first_purchase, data = churn_data, family = binomial)
+mdl_churn_vs_relationship
+```
+
+## 20. Probabilities
+
+```{r loading data, warning=FALSE}
+
+explanatory_data <- tibble(time_since_first_purchase = seq(-1.5, 4, 0.25))
+
+prediction_data <- explanatory_data %>% 
+  mutate(has_churned = predict(mdl_churn_vs_relationship, explanatory_data, type = "response"),
+  most_likely_outcome = round(has_churned))
+
+plt_churn_vs_relationship +
+  geom_point(aes(y = most_likely_outcome),
+    data = prediction_data, 
+    color = "yellow", 
+    size = 2)
+```
+
+## 21. Odds ratio
+
+```{r loading data, warning=FALSE}
+
+prediction_data1 <- explanatory_data %>% 
+  mutate(has_churned = predict(mdl_churn_vs_relationship, explanatory_data,type = "response"),
+  odds_ratio = has_churned/(1-has_churned)) 
+
+  ggplot(prediction_data1, aes(time_since_first_purchase, odds_ratio)) +
+  geom_line() +
+  geom_hline(yintercept = 1, linetype = "dotted")
+
+
+prediction_data1
+```
+
+## 22. Log odds ratio
+
+```{r loading data, warning=FALSE}
+
+prediction_data2 <- explanatory_data %>% 
+  mutate(has_churned = predict(mdl_churn_vs_relationship, explanatory_data, type = "response"),
+    odds_ratio = has_churned / (1 - has_churned),
+    log_odds_ratio = log(odds_ratio),
+    log_odds_ratio2 = predict(mdl_churn_vs_relationship, explanatory_data))
+
+# See the result
+prediction_data2
+```
